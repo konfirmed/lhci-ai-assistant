@@ -1,7 +1,7 @@
 {
   "name": "lhci-ai-assistant",
   "version": "0.1.0",
-  "description": "AI-powered companion tool for Lighthouse CI",
+  "description": "AI-powered companion tool for Lighthouse CI that analyzes performance regressions, explains root causes, and suggests fixes",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -12,24 +12,50 @@
     "dev": "tsc --watch",
     "test": "jest",
     "lint": "eslint src --ext .ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build && npm run test"
   },
   "keywords": [
     "lighthouse",
     "lighthouse-ci",
+    "lhci",
     "performance",
     "ai",
     "copilot",
+    "github-copilot",
+    "openai",
     "web-vitals",
-    "core-web-vitals"
+    "core-web-vitals",
+    "fcp",
+    "lcp",
+    "cls",
+    "performance-analysis",
+    "web-performance"
   ],
-  "author": "",
+  "author": "Kanmi Obasa <i@kanmiobasa.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/konfirmed/lhci-ai-assistant.git"
+  },
+  "bugs": {
+    "url": "https://github.com/konfirmed/lhci-ai-assistant/issues"
+  },
+  "homepage": "https://github.com/konfirmed/lhci-ai-assistant#readme",
   "engines": {
     "node": ">=18.0.0"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "peerDependencies": {
     "@lhci/cli": "^0.13.0"
+  },
+  "peerDependenciesMeta": {
+    "@lhci/cli": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@github/copilot-sdk": "^0.1.18",
