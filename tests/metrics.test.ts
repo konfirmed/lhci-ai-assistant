@@ -204,5 +204,39 @@ describe('Metrics Comparator', () => {
       );
       expect(['high', 'medium']).toContain(perfRegression?.severity);
     });
+
+    it('should ignore score noise below 2 percentage points', () => {
+      const baseline: Metrics = {
+        ...baselineMetrics,
+        scores: { ...baselineMetrics.scores, performance: 0.9 },
+      };
+      const current: Metrics = {
+        ...currentMetrics,
+        scores: { ...currentMetrics.scores, performance: 0.915 },
+      };
+
+      const result = compareMetrics(current, baseline);
+      const perfChanges = [...result.regressions, ...result.improvements].filter(
+        (item) => item.metric === 'Performance Score'
+      );
+
+      expect(perfChanges).toHaveLength(0);
+    });
+
+    it('should ignore small FCP changes below dynamic threshold', () => {
+      const baseline: Metrics = {
+        ...baselineMetrics,
+        coreWebVitals: { ...baselineMetrics.coreWebVitals, fcp: 3000 },
+      };
+      const current: Metrics = {
+        ...currentMetrics,
+        coreWebVitals: { ...currentMetrics.coreWebVitals, fcp: 3200 },
+      };
+
+      const result = compareMetrics(current, baseline);
+      const fcpRegression = result.regressions.find((item) => item.metric === 'FCP');
+
+      expect(fcpRegression).toBeUndefined();
+    });
   });
 });

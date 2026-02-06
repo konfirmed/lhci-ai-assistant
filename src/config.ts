@@ -1,6 +1,6 @@
 import { existsSync } from 'fs';
 import { resolve } from 'path';
-import { Config } from './types';
+import { BaselineStrategy, Config } from './types';
 
 const CONFIG_FILES = [
   '.lhcirc.js',
@@ -47,6 +47,7 @@ function normalizeConfig(config: unknown): Config {
     const ai = raw.ai as Record<string, unknown>;
     normalized.ai = {
       provider: validateProvider(ai.provider),
+      baselineStrategy: validateBaselineStrategy(ai.baselineStrategy),
       githubToken: typeof ai.githubToken === 'string' ? ai.githubToken : undefined,
       openaiKey: typeof ai.openaiKey === 'string' ? ai.openaiKey : undefined,
       autoFix: typeof ai.autoFix === 'boolean' ? ai.autoFix : undefined,
@@ -81,6 +82,20 @@ function validateProvider(value: unknown): 'copilot' | 'openai' | 'local' | unde
 function validateOutputFormat(value: unknown): 'terminal' | 'json' | 'markdown' | undefined {
   if (value === 'terminal' || value === 'json' || value === 'markdown') {
     return value;
+  }
+  return undefined;
+}
+
+function validateBaselineStrategy(
+  value: unknown
+): BaselineStrategy | undefined {
+  if (
+    value === 'latest' ||
+    value === 'same-url' ||
+    value === 'median' ||
+    (typeof value === 'string' && /^p(?:[1-9]\d?|100)$/.test(value))
+  ) {
+    return value as BaselineStrategy;
   }
   return undefined;
 }

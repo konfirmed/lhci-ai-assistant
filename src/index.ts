@@ -24,15 +24,26 @@ export type {
   Opportunity,
   PRDiff,
   GitHubFile,
+  BaselineStrategy,
 } from './types';
 
 // Configuration
 export { loadConfig, mergeOptions, getGitHubToken, getOpenAIKey } from './config';
 
 // Metrics
-export { loadLighthouseReports, loadManifest, getRepresentativeRuns } from './metrics/loader';
+export {
+  loadLighthouseReports,
+  loadManifest,
+  getRepresentativeRuns,
+  selectCurrentAndBaselineReports,
+} from './metrics/loader';
 export { extractMetrics, getMetricsSummary, formatScore, formatMs, formatBytes } from './metrics/extractor';
 export { compareMetrics, getComparisonSummary } from './metrics/comparator';
+export {
+  buildMedianBaselineMetrics,
+  buildPercentileBaselineMetrics,
+  getPercentileFromStrategy,
+} from './metrics/baseline';
 
 // GitHub
 export {

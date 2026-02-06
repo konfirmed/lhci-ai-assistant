@@ -6,9 +6,17 @@ import {
   ComparisonResult,
   PRDiff,
 } from './types';
-import { loadLighthouseReports } from './metrics/loader';
+import {
+  loadLighthouseReports,
+  selectCurrentAndBaselineReports,
+} from './metrics/loader';
 import { extractMetrics } from './metrics/extractor';
 import { compareMetrics } from './metrics/comparator';
+import {
+  buildMedianBaselineMetrics,
+  buildPercentileBaselineMetrics,
+  getPercentileFromStrategy,
+} from './metrics/baseline';
 import {
   fetchPRDiff,
   getRepoFromEnv,
@@ -35,14 +43,33 @@ export async function analyze(options: AnalyzeOptions): Promise<AnalysisResult> 
     const reports = await loadLighthouseReports();
     spinner.succeed(`Loaded ${reports.length} Lighthouse report(s)`);
 
+    const baselineStrategy = options.baselineStrategy || 'same-url';
+    const {
+      current: currentReport,
+      baseline: baselineReport,
+      baselineCandidates,
+    } = selectCurrentAndBaselineReports(reports, baselineStrategy);
+
     // Step 2: Extract metrics from current run
-    const currentMetrics = extractMetrics(reports[0]);
+    const currentMetrics = extractMetrics(currentReport);
     spinner.start('Analyzing metrics...');
 
     // Step 3: Compare with baseline if available
-    let comparison: ComparisonResult | null = null;
-    if (reports.length > 1) {
-      const baselineMetrics = extractMetrics(reports[reports.length - 1]);
+    let comparison: ComparisonResult;
+    const strategyPercentile = getPercentileFromStrategy(baselineStrategy);
+    if (baselineStrategy === 'median' && baselineCandidates.length > 0) {
+      const baselineSeries = baselineCandidates.map((report) => extractMetrics(report));
+      const medianBaseline = buildMedianBaselineMetrics(baselineSeries);
+      comparison = compareMetrics(currentMetrics, medianBaseline);
+    } else if (strategyPercentile !== undefined && baselineCandidates.length > 0) {
+      const baselineSeries = baselineCandidates.map((report) => extractMetrics(report));
+      const percentileBaseline = buildPercentileBaselineMetrics(
+        baselineSeries,
+        strategyPercentile
+      );
+      comparison = compareMetrics(currentMetrics, percentileBaseline);
+    } else if (baselineReport) {
+      const baselineMetrics = extractMetrics(baselineReport);
       comparison = compareMetrics(currentMetrics, baselineMetrics);
     } else {
       // Create a mock comparison with just current data
@@ -285,7 +312,8 @@ export async function quickCheck(thresholds?: {
   failures: string[];
 }> {
   const reports = await loadLighthouseReports();
-  const metrics = extractMetrics(reports[0]);
+  const { current } = selectCurrentAndBaselineReports(reports, 'latest');
+  const metrics = extractMetrics(current);
   const failures: string[] = [];
 
   const defaults = {

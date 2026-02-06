@@ -58,9 +58,17 @@ Options:
   --post-comment         Post analysis to GitHub PR
   --pr-number <number>   PR number for posting comments
   --repo <repo>          GitHub repository (owner/repo)
+  --baseline-strategy <strategy> Baseline strategy: latest | same-url | median | pXX (default: same-url)
   --output <format>      Output format: terminal | json | markdown (default: terminal)
   --config <path>        Config file path
 ```
+
+Baseline strategies:
+- `latest`: compare against the second-most-recent report.
+- `same-url`: compare against the most recent prior run for the same URL (fallback to latest).
+- `median`: compare against a median baseline from multiple prior runs (same URL when available).
+- `pXX` (for example `p75`, `p90`): compare against a percentile baseline from multiple prior runs.
+  For stricter regression guarding, scores use the requested percentile while timing metrics use the complementary percentile.
 
 ### `lhci-ai check`
 
@@ -95,6 +103,7 @@ Create a `.lhci-ai.js` or add to your existing `.lhcirc.js`:
 module.exports = {
   ai: {
     provider: 'local',        // 'copilot' | 'openai' | 'local'
+    baselineStrategy: 'same-url', // 'latest' | 'same-url' | 'median' | 'p75'
     autoFix: true,
     outputFormat: 'terminal',
   },

@@ -1,5 +1,16 @@
 import { Metrics, MetricComparison, ComparisonResult } from '../types';
 
+const SCORE_CHANGE_THRESHOLD = 0.02; // 2 percentage points
+
+const metricThresholds: Record<string, { absolute: number; relative: number }> = {
+  FCP: { absolute: 100, relative: 0.1 },
+  LCP: { absolute: 150, relative: 0.1 },
+  TBT: { absolute: 50, relative: 0.15 },
+  CLS: { absolute: 0.02, relative: 0.15 },
+  'Speed Index': { absolute: 200, relative: 0.1 },
+  TTI: { absolute: 200, relative: 0.1 },
+};
+
 /**
  * Compare current metrics against baseline metrics
  */
@@ -98,11 +109,11 @@ function createScoreComparison(
   base: number
 ): MetricComparison {
   const diff = current - base;
-  const diffPercent = base !== 0 ? (diff / base) * 100 : 0;
+  const diffPercent = calculateDiffPercent(base, diff);
 
   // For scores, higher is better
-  const isRegression = diff < -0.01; // 1% threshold
-  const isImprovement = diff > 0.01;
+  const isRegression = diff <= -SCORE_CHANGE_THRESHOLD;
+  const isImprovement = diff >= SCORE_CHANGE_THRESHOLD;
 
   return {
     metric,
@@ -125,11 +136,12 @@ function createMetricComparison(
   base: number
 ): MetricComparison {
   const diff = current - base;
-  const diffPercent = base !== 0 ? (diff / base) * 100 : 0;
+  const diffPercent = calculateDiffPercent(base, diff);
+  const threshold = getMetricThreshold(metric, base);
 
-  // For timing metrics, lower is better (except CLS which also lower is better)
-  const isRegression = diff > getMetricThreshold(metric);
-  const isImprovement = diff < -getMetricThreshold(metric);
+  // Lower is better for all compared CWV metrics
+  const isRegression = diff >= threshold;
+  const isImprovement = diff <= -threshold;
 
   return {
     metric,
@@ -141,22 +153,6 @@ function createMetricComparison(
     isImprovement,
     severity: getMetricSeverity(metric, diff),
   };
-}
-
-/**
- * Get the threshold for considering a change significant
- */
-function getMetricThreshold(metric: string): number {
-  const thresholds: Record<string, number> = {
-    FCP: 100, // 100ms
-    LCP: 100,
-    TBT: 50, // 50ms
-    CLS: 0.01,
-    'Speed Index': 200,
-    TTI: 200,
-  };
-
-  return thresholds[metric] ?? 100;
 }
 
 /**
@@ -235,8 +231,36 @@ function sortBySeverity(comparisons: MetricComparison[]): MetricComparison[] {
   };
 
   return [...comparisons].sort(
-    (a, b) => severityOrder[a.severity] - severityOrder[b.severity]
+    (a, b) =>
+      severityOrder[a.severity] - severityOrder[b.severity] ||
+      Math.abs(b.diff) - Math.abs(a.diff)
   );
+}
+
+/**
+ * Calculate percentage diff while handling zero baselines safely
+ */
+function calculateDiffPercent(base: number, diff: number): number {
+  if (base === 0) {
+    if (diff === 0) {
+      return 0;
+    }
+    return diff > 0 ? 100 : -100;
+  }
+
+  return (diff / base) * 100;
+}
+
+/**
+ * Get threshold using both absolute and relative bands to reduce noise
+ */
+function getMetricThreshold(metric: string, base: number): number {
+  const threshold = metricThresholds[metric];
+  if (!threshold) {
+    return 100;
+  }
+
+  return Math.max(threshold.absolute, Math.abs(base) * threshold.relative);
 }
 
 /**

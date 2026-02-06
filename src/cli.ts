@@ -3,7 +3,12 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { analyze, quickCheck } from './analyzer';
 import { loadConfig, getGitHubToken, getOpenAIKey } from './config';
-import { AnalyzeOptions, AIProvider, OutputFormat } from './types';
+import {
+  AnalyzeOptions,
+  AIProvider,
+  OutputFormat,
+  BaselineStrategy,
+} from './types';
 import { outputSuccess, outputError } from './output/terminal';
 
 const program = new Command();
@@ -25,16 +30,24 @@ program
   .option('--pr-number <number>', 'PR number', parseInt)
   .option('--repo <repo>', 'GitHub repository (owner/repo)')
   .option('--base-hash <hash>', 'Base commit hash for comparison')
+  .option(
+    '--baseline-strategy <strategy>',
+    'Baseline strategy: latest | same-url | median | pXX (e.g., p75)'
+  )
   .option('--output <format>', 'Output format: terminal | json | markdown', 'terminal')
   .option('--config <path>', 'Config file path')
   .action(async (cliOptions) => {
     try {
       // Load config file
       const config = await loadConfig(cliOptions.config);
+      const baselineStrategy = parseBaselineStrategy(
+        cliOptions.baselineStrategy || config.ai?.baselineStrategy || 'same-url'
+      );
 
       // Merge CLI options with config
       const options: AnalyzeOptions = {
         provider: (cliOptions.provider || config.ai?.provider || 'local') as AIProvider,
+        baselineStrategy,
         githubToken: cliOptions.githubToken || getGitHubToken(config),
         openaiKey: cliOptions.openaiKey || getOpenAIKey(config),
         autoFix: cliOptions.autoFix ?? config.ai?.autoFix ?? false,
@@ -130,6 +143,7 @@ program
 module.exports = {
   ai: {
     provider: 'local', // 'copilot' | 'openai' | 'local'
+    baselineStrategy: 'same-url', // 'latest' | 'same-url' | 'median' | 'p75'
     autoFix: true,
     outputFormat: 'terminal',
   },
@@ -158,6 +172,21 @@ function formatScore(score: number): string {
   } else {
     return chalk.red(`${pct}%`);
   }
+}
+
+function parseBaselineStrategy(value: string): BaselineStrategy {
+  if (
+    value === 'latest' ||
+    value === 'same-url' ||
+    value === 'median' ||
+    /^p(?:[1-9]\d?|100)$/.test(value)
+  ) {
+    return value as BaselineStrategy;
+  }
+
+  throw new Error(
+    `Invalid baseline strategy "${value}". Use latest, same-url, median, or pXX (for example p75).`
+  );
 }
 
 // Parse command line arguments

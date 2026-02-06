@@ -8,6 +8,14 @@ export type AIProvider = 'copilot' | 'openai' | 'local';
 // Output format types
 export type OutputFormat = 'terminal' | 'json' | 'markdown';
 
+// Baseline strategy
+export type PercentileBaselineStrategy = `p${number}`;
+export type BaselineStrategy =
+  | 'latest'
+  | 'same-url'
+  | 'median'
+  | PercentileBaselineStrategy;
+
 // Lighthouse report structure
 export interface LHReport {
   categories: Record<string, CategoryResult>;
@@ -118,6 +126,7 @@ export interface PRDiff {
 // Analysis options
 export interface AnalyzeOptions {
   provider: AIProvider;
+  baselineStrategy?: BaselineStrategy;
   githubToken?: string;
   openaiKey?: string;
   autoFix?: boolean;
@@ -168,6 +177,7 @@ export interface AutoFix {
 export interface Config {
   ai?: {
     provider?: AIProvider;
+    baselineStrategy?: BaselineStrategy;
     githubToken?: string;
     openaiKey?: string;
     autoFix?: boolean;

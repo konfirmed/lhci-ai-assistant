@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { LHReport } from '../types';
+import { BaselineStrategy, LHReport } from '../types';
 
 const LHCI_DIR = '.lighthouseci';
 
@@ -17,7 +17,9 @@ export async function loadLighthouseReports(basePath?: string): Promise<LHReport
   }
 
   const files = readdirSync(lhciDir);
-  const jsonFiles = files.filter((file) => file.startsWith('lhr-') && file.endsWith('.json'));
+  const jsonFiles = files
+    .filter((file) => file.startsWith('lhr-') && file.endsWith('.json'))
+    .sort();
 
   if (jsonFiles.length === 0) {
     throw new Error(
@@ -25,13 +27,13 @@ export async function loadLighthouseReports(basePath?: string): Promise<LHReport
     );
   }
 
-  const reports: LHReport[] = [];
+  const reports: Array<{ file: string; report: LHReport }> = [];
 
   for (const file of jsonFiles) {
     try {
       const content = readFileSync(join(lhciDir, file), 'utf-8');
       const report = JSON.parse(content) as LHReport;
-      reports.push(report);
+      reports.push({ file, report });
     } catch (error) {
       console.warn(`Warning: Failed to parse ${file}:`, error);
     }
@@ -41,7 +43,7 @@ export async function loadLighthouseReports(basePath?: string): Promise<LHReport
     throw new Error('Failed to load any valid Lighthouse reports.');
   }
 
-  return reports;
+  return sortReportsByRecency(reports);
 }
 
 /**
@@ -99,7 +101,7 @@ export async function getRepresentativeRuns(basePath?: string): Promise<Map<stri
     if (entry.isRepresentativeRun) {
       try {
         const report = await loadReportByName(
-          entry.jsonPath.replace('.lighthouseci/', ''),
+          normalizeManifestPath(entry.jsonPath),
           basePath
         );
         runs.set(entry.url, report);
@@ -123,5 +125,119 @@ export function listReports(basePath?: string): string[] {
   }
 
   const files = readdirSync(lhciDir);
-  return files.filter((file) => file.startsWith('lhr-') && file.endsWith('.json'));
+  return files
+    .filter((file) => file.startsWith('lhr-') && file.endsWith('.json'))
+    .sort();
+}
+
+export interface ReportPair {
+  current: LHReport;
+  baseline?: LHReport;
+  baselineCandidates: LHReport[];
+}
+
+/**
+ * Select a deterministic current and baseline report pair
+ */
+export function selectCurrentAndBaselineReports(
+  reports: LHReport[],
+  strategy: BaselineStrategy = 'same-url'
+): ReportPair {
+  if (reports.length === 0) {
+    throw new Error('At least one Lighthouse report is required');
+  }
+
+  const current = reports[0];
+  const historical = reports.slice(1);
+
+  if (reports.length === 1) {
+    return { current, baselineCandidates: [] };
+  }
+
+  const baselineCandidates = getBaselineCandidates(current, historical, strategy);
+  const baseline = baselineCandidates[0];
+
+  return { current, baseline, baselineCandidates };
+}
+
+function sortReportsByRecency(
+  reports: Array<{ file: string; report: LHReport }>
+): LHReport[] {
+  return reports
+    .sort((a, b) => {
+      const aTime = parseTime(a.report.fetchTime);
+      const bTime = parseTime(b.report.fetchTime);
+
+      if (aTime !== bTime) {
+        return bTime - aTime;
+      }
+
+      return b.file.localeCompare(a.file);
+    })
+    .map((entry) => entry.report);
+}
+
+function parseTime(value?: string): number {
+  if (!value) {
+    return 0;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeManifestPath(jsonPath: string): string {
+  return jsonPath.replace(/\\/g, '/').replace('.lighthouseci/', '');
+}
+
+function normalizeReportUrl(report: LHReport): string {
+  const raw = report.requestedUrl || report.finalUrl || '';
+
+  try {
+    const parsed = new URL(raw);
+    const path = parsed.pathname.replace(/\/+$/, '') || '/';
+    return `${parsed.origin}${path}`;
+  } catch {
+    return raw.replace(/\/+$/, '');
+  }
+}
+
+function getBaselineCandidates(
+  current: LHReport,
+  historical: LHReport[],
+  strategy: BaselineStrategy
+): LHReport[] {
+  if (historical.length === 0) {
+    return [];
+  }
+
+  switch (strategy) {
+    case 'latest':
+      return historical.slice(0, 1);
+
+    case 'median': {
+      const sameUrl = historical.filter(
+        (report) => normalizeReportUrl(report) === normalizeReportUrl(current)
+      );
+
+      return sameUrl.length > 0 ? sameUrl : historical;
+    }
+
+    case 'same-url':
+    default: {
+      if (/^p(?:[1-9]\d?|100)$/.test(strategy)) {
+        const sameUrl = historical.filter(
+          (report) => normalizeReportUrl(report) === normalizeReportUrl(current)
+        );
+
+        return sameUrl.length > 0 ? sameUrl : historical;
+      }
+
+      const sameUrl = historical.filter(
+        (report) => normalizeReportUrl(report) === normalizeReportUrl(current)
+      );
+
+      return sameUrl.length > 0 ? sameUrl : historical.slice(0, 1);
+    }
+  }
 }
