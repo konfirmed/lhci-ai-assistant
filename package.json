@@ -1,6 +1,6 @@
 {
   "name": "lhci-ai-assistant",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "AI-powered companion tool for Lighthouse CI that analyzes performance regressions, explains root causes, and suggests fixes",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
